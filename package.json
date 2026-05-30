@@ -1,0 +1,11 @@
+{
+  "name": "evinra-mobile-scan",
+  "version": "1.0.0",
+  "description": "Evinra Mobile Scan App — uses the shared evinra-shared-db service",
+  "main": "server.js",
+  "engines": { "node": ">=18.0.0" },
+  "scripts": {
+    "start": "node server.js",
+    "dev":   "node --watch server.js"
+  }
+}
