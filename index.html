@@ -1732,6 +1732,10 @@ function renderContent() {
 
 function renderScanTab() {
   // MVP: QR only — NFC removed
+  // Real ticket data from the last /api/scan/validate call (null until first scan).
+  const ls = state.lastScan || {};
+  const fmtScanTime = (iso) => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); };
+  const esc = (s) => String(s == null ? '' : s).replace(/'/g, "\\'");
   const results = {
     idle: {
       cls: 's-idle',
@@ -1745,10 +1749,10 @@ function renderScanTab() {
              <div class="head-lg">CHECKED IN</div>
              <div class="sub">Welcome to the event</div>
              <div class="info-card">
-               <div class="info-card-name">Sofia Mendez</div>
-               <div class="info-card-sub">3-day pass · VIP tier · Adult</div>
+               <div class="info-card-name">${ls.guest || 'Guest'}</div>
+               <div class="info-card-sub">${ls.type || 'General admission'}${ls.event_name ? ' · ' + ls.event_name : ''}${ls.order ? ' · ' + ls.order : ''}</div>
              </div>
-             <button onclick="startGateWristband('TKT-DEMO','Sofia Mendez')"
+             <button onclick="startGateWristband('${esc(ls.code || 'TKT-DEMO')}','${esc(ls.guest || 'Guest')}')"
                style="margin-top:18px;padding:13px 24px;border-radius:12px;min-height:44px;
                       background:rgba(0,0,0,0.25);border:1.5px solid rgba(255,255,255,0.3);
                       color:#fff;font-size:13px;font-weight:600;cursor:pointer;
@@ -1826,31 +1830,31 @@ function renderScanTab() {
       cls: 's-dup',
       body: `<div class="result-icon">${ICONS.alert}</div>
              <div class="head-lg">ALREADY SCANNED</div>
-             <div class="sub">This ticket was already used</div>
+             <div class="sub">This ticket was already used${fmtScanTime(ls.scanned_at) ? ' at ' + fmtScanTime(ls.scanned_at) : ''}</div>
              <div class="info-card">
-               <div class="info-card-name">First scan · 9:14 PM</div>
-               <div class="info-card-sub">Location A · Scanner 1 · Staff: Maria</div>
+               <div class="info-card-name">${ls.guest || 'Guest'}</div>
+               <div class="info-card-sub">${ls.type || 'General admission'}${ls.order ? ' · ' + ls.order : ''}</div>
              </div>
              <div class="chip">Single-use · no reentry</div>`,
     },
     wrong_show: {
       cls: 's-invalid',
       body: `<div class="result-icon">${ICONS.x}</div>
-             <div class="head-lg">WRONG SHOW</div>
-             <div class="sub">Ticket is valid for Sat 2:00 PM</div>
+             <div class="head-lg">WRONG EVENT</div>
+             <div class="sub">Ticket is valid — but not for this gate</div>
              <div class="info-card">
-               <div class="info-card-name">Direct guest to ticket desk</div>
-               <div class="info-card-sub">Offer exchange if seats available</div>
+               <div class="info-card-name">${ls.guest || 'Guest'}</div>
+               <div class="info-card-sub">Ticket: ${ls.event_label || ls.event_name || '—'} · This gate: ${ls.gate_label || ls.gate_name || '—'}</div>
              </div>`,
     },
     canceled: {
       cls: 's-invalid',
       body: `<div class="result-icon">${ICONS.x}</div>
-             <div class="head-lg">REFUNDED</div>
-             <div class="sub">Ticket refunded Oct 18</div>
+             <div class="head-lg">VOID / REFUNDED</div>
+             <div class="sub">This ticket has been voided or refunded</div>
              <div class="info-card">
-               <div class="info-card-name">Do not admit</div>
-               <div class="info-card-sub">Guest may dispute — call supervisor</div>
+               <div class="info-card-name">${ls.guest || 'Do not admit'}</div>
+               <div class="info-card-sub">${ls.order ? 'Order ' + ls.order + ' · ' : ''}Contact box office if disputed</div>
              </div>`,
     },
     age: {
@@ -2235,38 +2239,39 @@ function renderWristbandTab() {
         </div>
       `;
     } else {
-      // Guest list: mix of valid + error cases
-      const guests = [
-        { name: 'Sofia Mendez',   pass: '3-day pass · VIP tier',       order: 'EVR-4912', initials: 'SM', error: null },
-        { name: 'Marcus Rivera',  pass: '3-day pass · Adult',           order: 'EVR-4713', initials: 'MR', error: null },
-        { name: 'Elena Chen',     pass: 'VIP · General admission',      order: 'EVR-4098', initials: 'EC', error: null },
-        { name: 'Ana Torres',     pass: 'General admission',            order: 'EVR-4201', initials: 'AT', error: 'already_paired' },
-        { name: 'James Parker',   pass: 'Single day · Child',           order: 'EVR-4512', initials: 'JP', error: 'not_checked_in' },
-      ];
+      // Guest list — REAL tickets from the shared DB (loaded into state.wbGuests).
+      if (state.wbGuests == null && !state.wbGuestsLoading) { loadWbGuests(state.wbGuestQuery || ''); }
+      const guests = state.wbGuests || [];
+      // ticket status → wristband-flow state: 'used' = already checked in (ready to pair),
+      // 'valid' = not checked in yet, 'void' = refunded/canceled.
+      const statusToError = (st) => st === 'valid' ? 'not_checked_in' : (st === 'void' ? 'wrong_event' : null);
+      const ini = (nm) => String(nm || '?').split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+      const q = (s) => String(s == null ? '' : s).replace(/'/g, "\\'");
+      const rows = guests.length ? guests.map(g => {
+        const errType = statusToError(g.status);
+        const tag = errType === 'not_checked_in'
+          ? `<span class="status-pill" style="margin-left:auto;background:rgba(100,116,139,0.15);color:var(--t-3)">Not in yet</span>`
+          : errType === 'wrong_event'
+          ? `<span class="status-pill" style="margin-left:auto;background:var(--err-bg);color:var(--err-t)">Void</span>`
+          : `<span class="status-pill sp-in" style="margin-left:auto">Checked in</span>`;
+        return `
+          <div class="wb-stn-guest-row" onclick="wbStationGuestFound('${q(g.name)}', '${q(g.pass)}', '${q(g.ticket_code)}', ${errType ? `'${errType}'` : 'null'})">
+            <div class="wb-stn-guest-avatar">${ini(g.name)}</div>
+            <div class="wb-stn-guest-body">
+              <div class="wb-stn-guest-name">${g.name}</div>
+              <div class="wb-stn-guest-meta">${g.pass}${g.order ? ' · ' + g.order : ''}</div>
+            </div>
+            ${tag}
+          </div>`;
+      }).join('') : `<div style="padding:18px;text-align:center;color:var(--t-3);font-size:13px">${(state.wbGuests == null || state.wbGuestsLoading) ? 'Loading guests…' : 'No guests found'}</div>`;
       return `
         <div class="page">
           <button class="wb-stn-back" onclick="wbStationReset()">‹ Back</button>
           <div class="sect" style="margin-top:12px">Find a guest</div>
-          <input class="input" placeholder="Name, email, order #…" autofocus />
+          <input class="input" placeholder="Name, email, order #…" value="${(state.wbGuestQuery || '').replace(/"/g, '&quot;')}" onchange="wbStationSearch(this.value)" autofocus />
 
           <div class="sect" style="margin-top:14px">Guests</div>
-          ${guests.map(g => {
-            const err = g.error ? WB_ERRORS[g.error] : null;
-            const tag = g.error === 'already_paired'
-              ? `<span class="status-pill" style="margin-left:auto;background:var(--blue-dim);color:var(--blue)">Has band</span>`
-              : g.error === 'not_checked_in'
-              ? `<span class="status-pill" style="margin-left:auto;background:rgba(100,116,139,0.15);color:var(--t-3)">Not in yet</span>`
-              : `<span class="status-pill sp-in" style="margin-left:auto">Checked in</span>`;
-            return `
-              <div class="wb-stn-guest-row" onclick="wbStationGuestFound('${g.name}', '${g.pass}', '${g.order}', ${g.error ? `'${g.error}'` : 'null'})">
-                <div class="wb-stn-guest-avatar">${g.initials}</div>
-                <div class="wb-stn-guest-body">
-                  <div class="wb-stn-guest-name">${g.name}</div>
-                  <div class="wb-stn-guest-meta">${g.pass} · ${g.order}</div>
-                </div>
-                ${tag}
-              </div>`;
-          }).join('')}
+          ${rows}
         </div>
       `;
     }
@@ -2386,6 +2391,26 @@ function renderWristbandTab() {
 function wbStationStart(method) {
   state.wbStation = { step: 'identifying', method, guest: null, uid: null };
   render();
+}
+
+// Load real guests (tickets joined to orders) for the wristband search.
+function loadWbGuests(q) {
+  state.wbGuestQuery = q || '';
+  state.wbGuestsLoading = true;
+  const eventId = (state.session && state.session.event && state.session.event.id) || '';
+  const url = DB_URL + '/api/scan/guests?'
+    + (eventId ? 'event_id=' + encodeURIComponent(eventId) + '&' : '')
+    + 'q=' + encodeURIComponent(q || '');
+  fetch(url)
+    .then(r => r.json())
+    .then(list => { state.wbGuests = Array.isArray(list) ? list : []; state.wbGuestsLoading = false; render(); })
+    .catch(() => { state.wbGuests = []; state.wbGuestsLoading = false; render(); });
+}
+
+function wbStationSearch(q) {
+  state.wbGuests = null;       // force reload with the new query
+  state.wbGuestsLoading = false;
+  loadWbGuests(q);
 }
 
 function wbStationGuestFound(name, pass, ticketId, errorType) {
@@ -4650,24 +4675,49 @@ function goTab(id) {
   if (id === 'dash') ensureDashInitialized();
 }
 
-function setScan(result) {
+// Real scan: pulls a REAL ticket code from the shared DB matching the chosen
+// scenario, then validates it through /api/scan/validate. The displayed result
+// (and guest/type/event info) reflects actual DB state — e.g. scanning the same
+// ticket twice genuinely returns "duplicate". Falls back to the simulated result
+// if :4000 is unreachable (offline MVP behaviour).
+async function setScan(scenario) {
   state.activeTab = 'scan';
-  state.scanResult = result;
-  render();
 
-  // Log scan event to shared DB (fire-and-forget, non-blocking)
-  if (result !== 'idle' && state.currentUser) {
-    const ticketCode = 'TKT-' + Math.random().toString(36).slice(2,8).toUpperCase();
-    fetch(DB_URL + '/api/scan/event', {
+  if (scenario === 'idle') {
+    state.scanResult = 'idle';
+    state.lastScan = null;
+    render();
+    return;
+  }
+
+  const eventId = (state.session && state.session.event && state.session.event.id) || '';
+  try {
+    // 1) get a real ticket code for this scenario
+    const sRes = await fetch(DB_URL + '/api/scan/sample?scenario=' + encodeURIComponent(scenario)
+      + (eventId ? '&event_id=' + encodeURIComponent(eventId) : ''));
+    const sample = await sRes.json();
+    const code = sample && sample.ticket_code;
+    if (!code) throw new Error('no sample ticket');
+
+    // 2) validate it against the real backend (marks valid tickets as used)
+    const vRes = await fetch(DB_URL + '/api/scan/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ticket_code: ticketCode,
-        scanned_by: state.currentUser.id,
-        result,
+        ticket_code: code,
+        event_id: eventId || null,
+        scanned_by: state.currentUser ? state.currentUser.id : null,
       }),
-    }).catch(() => {}); // silent — offline is ok for MVP
+    });
+    const data = await vRes.json();
+    state.scanResult = data.result || scenario;
+    state.lastScan   = data.ticket || null;
+  } catch (e) {
+    // Offline / no data — keep the demo usable with the simulated result.
+    state.scanResult = scenario;
+    state.lastScan = null;
   }
+  render();
 }
 
 function setScanMode(mode) {
