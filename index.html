@@ -5040,6 +5040,20 @@ function cancelGateWristband() {
 
 /* ========== EVENT PICKER (post-login) ========== */
 
+// Strip the generator's "· YYYY-MM" suffix to get a clean event/show name.
+function epClean(n) { return String(n || '').replace(/\s*·\s*\d{4}-\d{2}\s*$/, '').trim(); }
+// Parse an event's start_at into { date (with day), time, ts }.
+function epWhen(start) {
+  if (!start) return { date: 'Date TBD', time: '', ts: null };
+  const d = new Date(String(start).replace(' ', 'T'));
+  if (isNaN(d)) return { date: 'Date TBD', time: '', ts: null };
+  return {
+    date: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }),
+    time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+    ts:   d.getTime(),
+  };
+}
+
 function renderEventPicker() {
   const overlay = document.getElementById('event-picker-overlay');
   const shown   = state.signedIn && state.pendingEventSelection;
@@ -5047,47 +5061,40 @@ function renderEventPicker() {
   if (!shown) return;
 
   const content = document.getElementById('event-picker-content');
+  const selectedId = state.eventPickerSelected; // event id (string) or null
 
-  // Mark the next upcoming time slot as CURRENT EVENT
-  const nowH = new Date().getHours() + new Date().getMinutes() / 60;
-  const TIMES = ['6:00 PM', '8:00 PM', '10:00 PM'];
-  function slotHour(timeStr) {
-    const m = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-    if (!m) return 0;
-    let h = parseInt(m[1]);
-    if (m[3].toUpperCase() === 'PM' && h !== 12) h += 12;
-    if (m[3].toUpperCase() === 'AM' && h === 12) h = 0;
-    return h + parseInt(m[2]) / 60;
-  }
-  // Find the slot closest to now (upcoming first, then most recent if all past)
-  const hours = TIMES.map(slotHour);
-  const upcoming = hours.filter(h => h >= nowH);
-  const currentHour = upcoming.length ? Math.min(...upcoming) : Math.max(...hours);
-  function isCurrent(timeStr) { return Math.abs(slotHour(timeStr) - currentHour) < 0.01; }
-  const selectedId = state.eventPickerSelected; // { prodId, time }
+  // One card per real event, sorted by date, showing the actual day + time.
+  const evs = (state.dbEvents || []).map(e => {
+    const w = epWhen(e.start_at);
+    return { id: String(e.id || e._id), name: epClean(e.name) || 'Event', date: w.date, time: w.time, ts: w.ts, desc: e.description };
+  }).sort((a, b) => (a.ts || Infinity) - (b.ts || Infinity));
 
-  // Build flat list: each event × each time slot
-  const cards = (state.dbEvents || []).flatMap(e =>
-    TIMES.map(t => ({ prodId: e.id, prodName: e.name, desc: e.description, time: t, current: isCurrent(t) }))
-  );
+  // Mark the "current" event: one happening today, else the soonest upcoming.
+  const now = Date.now();
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = startOfToday.getTime() + 86400000;
+  let currentId = (evs.find(e => e.ts != null && e.ts >= startOfToday.getTime() && e.ts < endOfToday) || {}).id;
+  if (!currentId) { const up = evs.filter(e => e.ts != null && e.ts >= now); currentId = (up[0] || evs[0] || {}).id; }
 
-  const cardHTML = cards.length === 0
+  const cardHTML = evs.length === 0
     ? `<div style="color:var(--t-3);font-size:13px;text-align:center;padding:40px 0">Loading events…</div>`
-    : cards.map(c => {
-        const sel = selectedId && selectedId.prodId === c.prodId && selectedId.time === c.time;
+    : evs.map(e => {
+        const sel = selectedId === e.id;
+        const isCurrent = e.id === currentId;
+        const meta = [e.date, e.time].filter(Boolean).join(' · ');
         return `
-          <button onclick="pickEventSlot(${c.prodId},'${c.prodName.replace(/'/g,"\\'")}','${c.time}')"
+          <button onclick="selectEventCard('${e.id}')"
             style="width:100%;text-align:left;background:${sel ? 'rgba(45,184,156,.10)' : 'rgba(255,255,255,.03)'};
                    border:0.5px solid ${sel ? 'var(--p-border)' : 'var(--bd)'};
                    border-radius:14px;padding:14px 16px;margin-bottom:10px;
                    cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:12px">
             <div style="width:9px;height:9px;border-radius:50%;flex-shrink:0;
-                        background:${c.current ? 'var(--p)' : 'var(--t-4)'}"></div>
+                        background:${isCurrent ? 'var(--p)' : 'var(--t-4)'}"></div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:15px;font-weight:600;color:var(--t);margin-bottom:3px">${c.prodName}</div>
-              <div style="font-size:12px;color:var(--t-3)">${c.time}${c.desc ? ' · ' + c.desc : ''}</div>
+              <div style="font-size:15px;font-weight:600;color:var(--t);margin-bottom:3px">${e.name}</div>
+              <div style="font-size:12px;color:var(--t-3)">${meta}${e.desc ? ' · ' + e.desc : ''}</div>
             </div>
-            ${c.current ? `<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--p);background:var(--p-dim);border:0.5px solid var(--p-border);padding:3px 8px;border-radius:6px;flex-shrink:0">CURRENT EVENT</span>` : ''}
+            ${isCurrent ? `<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--p);background:var(--p-dim);border:0.5px solid var(--p-border);padding:3px 8px;border-radius:6px;flex-shrink:0">TODAY</span>` : ''}
             ${sel ? `<span style="color:var(--p);font-size:18px;flex-shrink:0">✓</span>` : ''}
           </button>`;
       }).join('');
@@ -5101,9 +5108,9 @@ function renderEventPicker() {
         <button onclick="skipEventAndLogout()" style="background:none;border:none;color:var(--t-3);font-size:13px;cursor:pointer;font-family:inherit;padding:0;display:flex;align-items:center;gap:4px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg> Back
         </button>
-        <div style="font-size:18px;font-weight:700;color:var(--t);font-family:var(--sans)">Today's Events</div>
+        <div style="font-size:18px;font-weight:700;color:var(--t);font-family:var(--sans)">Your Events</div>
       </div>
-      <div style="font-size:13px;color:var(--t-3);margin-bottom:20px">Select the event you're working today</div>
+      <div style="font-size:13px;color:var(--t-3);margin-bottom:20px">Select the event you're working, then Start Shift</div>
       ${cardHTML}
     </div>
     <div class="login-foot">
@@ -5113,21 +5120,20 @@ function renderEventPicker() {
   `;
 }
 
-function pickEventSlot(prodId, prodName, time) {
-  // Single tap: select + enter immediately
-  state.session.production = { id: prodId, name: prodName };
-  state.session.event = { id: prodId, time };
-  state.pendingEventSelection = false;
-  state.eventPickerSelected = null;
-  saveScanSession();
-  render();
+function selectEventCard(eventId) {
+  // Tap to select (highlights the card + enables Start Shift); confirm with startShift().
+  state.eventPickerSelected = (state.eventPickerSelected === eventId) ? null : eventId;
+  renderEventPicker();
 }
 
 function startShift() {
-  const s = state.eventPickerSelected;
-  if (!s) return;
-  state.session.production = { id: s.prodId, name: s.prodName };
-  state.session.event = { id: s.prodId, time: s.time };
+  const id = state.eventPickerSelected;
+  if (!id) return;
+  const e = (state.dbEvents || []).find(x => String(x.id || x._id) === String(id));
+  if (!e) return;
+  const w = epWhen(e.start_at);
+  state.session.production = { id, name: epClean(e.name) || 'Event' };
+  state.session.event = { id, time: w.time || '', date: w.date || '' };
   state.pendingEventSelection = false;
   state.eventPickerSelected = null;
   saveScanSession();
