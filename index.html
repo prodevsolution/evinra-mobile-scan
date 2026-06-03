@@ -1606,6 +1606,7 @@ const state = {
 
   // DB-loaded lists for pickers
   dbLocations: [],
+  locationsLoaded: false,
   dbEvents: [],
   dbEventTimes: [],
   showPickerStep: 'production',   // 'production' | 'event'
@@ -4293,13 +4294,13 @@ function renderMenuTab() {
           <div class="page-title" style="margin:0">Choose Location</div>
         </div>
         ${state.dbLocations.length === 0
-          ? `<div style="color:var(--t-3);font-size:13px;text-align:center;padding:40px 0">Loading locations…</div>`
+          ? `<div style="color:var(--t-3);font-size:13px;text-align:center;padding:40px 16px;line-height:1.6">${state.locationsLoaded ? 'No locations set up for your company yet.<br>Add them in the Ticket System (Settings → Locations).' : 'Loading locations…'}</div>`
           : state.dbLocations.map(l => `
-            <button class="menu-row" onclick="selectLocation(${l.id},'${l.name.replace(/'/g,"\\'")}')">
+            <button class="menu-row" onclick="selectLocation('${String(l.id||l._id)}','${String(l.name||'').replace(/'/g,"\\'")}')">
               <div class="menu-ic">${ICONS.location}</div>
               <div class="menu-body">
                 <div class="menu-ttl">${l.name}</div>
-                ${l.city ? `<div class="menu-sub">${l.city}</div>` : ''}
+                ${(l.type || l.production) ? `<div class="menu-sub">${[l.type, l.production].filter(Boolean).join(' · ')}</div>` : ''}
               </div>
               ${loc && loc.id === l.id ? `<span style="color:var(--g);font-size:18px">✓</span>` : `<span class="menu-arr">›</span>`}
             </button>`).join('')}
@@ -5188,10 +5189,15 @@ function openLocationPicker() {
   state.locationPickerOpen = true;
   if (!state.dbLocations.length) {
     render(); // show loading state immediately
-    fetch(DB_URL + '/api/db/locations?order=name.asc')
+    // Operational locations (Midway, Gate, …) managed in the Ticket System,
+    // scoped to the operator's company.
+    var tid = state.currentUser && state.currentUser.tenantId;
+    var q = tid ? '/op_locations?tenant_id=eq.' + encodeURIComponent(tid) + '&order=name.asc'
+                : '/op_locations?order=name.asc';
+    fetch(DB_URL + '/api/db' + q)
       .then(r => r.json())
-      .then(list => { state.dbLocations = list; render(); })
-      .catch(() => render());
+      .then(list => { state.dbLocations = Array.isArray(list) ? list : []; state.locationsLoaded = true; render(); })
+      .catch(() => { state.locationsLoaded = true; render(); });
   } else {
     render();
   }
