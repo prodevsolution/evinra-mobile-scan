@@ -1,0 +1,5 @@
+# Always serve fresh HTML (the app is a single index.html that changes on deploy).
+/
+  Cache-Control: no-store, max-age=0, must-revalidate
+/index.html
+  Cache-Control: no-store, max-age=0, must-revalidate
