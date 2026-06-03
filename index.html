@@ -4216,6 +4216,7 @@ function renderMenuTab() {
         <div>
           <div class="profile-name">${user ? user.name : '—'}</div>
           <div class="profile-role">${roleLabel}</div>
+          ${user && user.tenantName ? `<div style="font-size:12px;color:var(--t-3);margin-top:2px">${user.tenantName}</div>` : ''}
         </div>
       </div>
 
@@ -4569,6 +4570,7 @@ function renderLoginLoading() {
 /* Login actions */
 
 function signOut() {
+  clearScanSession();
   state.signedIn = false;
   state.currentUser = null;
   state.role = 'scanner_only';
@@ -4601,6 +4603,83 @@ function toggleRemember() {
   render();
 }
 
+/* ===== Tenant-scoped session (operators are managed from the Ticket System) ===== */
+const SCAN_SESSION_KEY = 'evinra-scan-session';
+
+function saveScanSession() {
+  if (!state.currentUser) return;
+  const payload = {
+    user: state.currentUser,            // { id, name, email, role, appRole, tenantId, tenantName }
+    role: state.role,
+    activeTab: state.activeTab,
+    session: {
+      location:   state.session.location,
+      production: state.session.production,
+      event:      state.session.event,
+    },
+    ts: Date.now(),
+  };
+  try {
+    const remember = !!state.login.remember;
+    (remember ? localStorage : sessionStorage).setItem(SCAN_SESSION_KEY, JSON.stringify(payload));
+    (remember ? sessionStorage : localStorage).removeItem(SCAN_SESSION_KEY); // keep a single copy
+  } catch (e) {}
+}
+
+function clearScanSession() {
+  try { localStorage.removeItem(SCAN_SESSION_KEY); sessionStorage.removeItem(SCAN_SESSION_KEY); } catch (e) {}
+}
+
+function restoreScanSession() {
+  let raw = null, persistent = false;
+  try {
+    raw = sessionStorage.getItem(SCAN_SESSION_KEY);
+    if (!raw) { raw = localStorage.getItem(SCAN_SESSION_KEY); persistent = true; }
+  } catch (e) {}
+  if (!raw) return false;
+  let p; try { p = JSON.parse(raw); } catch (e) { return false; }
+  if (!p || !p.user) return false;
+  // "Remember me" sessions persist up to 12h; tab sessions live until the tab closes.
+  if (persistent && p.ts && (Date.now() - p.ts) > 12 * 3600 * 1000) { clearScanSession(); return false; }
+
+  state.currentUser = p.user;
+  state.role = p.role || p.user.appRole || 'scanner_only';
+  state.signedIn = true;
+  state.login.remember = persistent;
+  state.activeTab = p.activeTab || (state.role === 'wristband_only' ? 'wristband' : 'scan');
+  state.session.location   = (p.session && p.session.location)   || null;
+  state.session.production = (p.session && p.session.production) || null;
+  state.session.event      = (p.session && p.session.event)     || null;
+  state.pendingEventSelection = !state.session.event;
+  // Load this operator's company catalogue (for the picker / name re-render).
+  loadTenantEvents(state.currentUser.tenantId);
+  return true;
+}
+
+/* Scope the scan catalogue to the operator's company: event → show → production → tenant. */
+function loadTenantEvents(tenantId) {
+  const base = DB_URL + '/api/db';
+  const done = () => { try { renderEventPicker(); } catch (e) {} render(); };
+  if (!tenantId) {
+    // No tenant on the account — fall back to all published events (back-compat).
+    fetch(base + '/events?status=eq.published&order=name.asc')
+      .then(r => r.json())
+      .then(list => { state.dbEvents = Array.isArray(list) ? list : []; done(); })
+      .catch(() => {});
+    return;
+  }
+  Promise.all([
+    fetch(base + '/productions?tenant_id=eq.' + encodeURIComponent(tenantId)).then(r => r.json()).catch(() => []),
+    fetch(base + '/shows').then(r => r.json()).catch(() => []),
+    fetch(base + '/events?status=eq.published&order=name.asc').then(r => r.json()).catch(() => []),
+  ]).then(([prods, shows, events]) => {
+    const prodIds = new Set((prods || []).map(p => String(p.id || p._id)));
+    const showIds = new Set((shows || []).filter(s => prodIds.has(String(s.production_id))).map(s => String(s.id || s._id)));
+    state.dbEvents = (events || []).filter(e => showIds.has(String(e.show_id)));
+    done();
+  }).catch(() => {});
+}
+
 function submitLogin() {
   const l = state.login;
   if (!l.email || !l.password) {
@@ -4628,21 +4707,18 @@ function submitLogin() {
         state.login.error = data.error || 'Sign-in failed';
         render(); return;
       }
-      // Success — set user + role from DB
-      state.currentUser = data.user;
+      // Success — set user + role from DB (tenant comes from the authenticated user)
+      state.currentUser = data.user;        // includes tenantId + tenantName
       state.role = data.user.appRole;       // 'scanner_only' | 'wristband_only'
       state.signedIn = true;
       state.activeTab = data.user.appRole === 'wristband_only' ? 'wristband' : 'scan';
       state.pendingEventSelection = true;
       state.eventPickerSelected = null;
+      saveScanSession();                    // persist now; event is chosen next
       render();
-      // Pre-load events for the picker
-      if (!state.dbEvents.length) {
-        fetch(DB_URL + '/api/db/events?status=eq.published&order=name.asc')
-          .then(r => r.json())
-          .then(list => { state.dbEvents = list; renderEventPicker(); })
-          .catch(() => {});
-      }
+      // Pre-load THIS company's events for the picker (scoped by tenant).
+      state.dbEvents = [];
+      loadTenantEvents(data.user.tenantId);
     })
     .catch(() => {
       state.login.step = 'form';
@@ -5043,6 +5119,7 @@ function pickEventSlot(prodId, prodName, time) {
   state.session.event = { id: prodId, time };
   state.pendingEventSelection = false;
   state.eventPickerSelected = null;
+  saveScanSession();
   render();
 }
 
@@ -5053,6 +5130,7 @@ function startShift() {
   state.session.event = { id: s.prodId, time: s.time };
   state.pendingEventSelection = false;
   state.eventPickerSelected = null;
+  saveScanSession();
   render();
 }
 
@@ -5090,14 +5168,10 @@ function selectLocation(id, name) {
 function openShowPicker() {
   state.showPickerStep = 'production';
   state.showPickerOpen = true;
+  render();
   if (!state.dbEvents.length) {
-    render();
-    fetch(DB_URL + '/api/db/events?order=name.asc')
-      .then(r => r.json())
-      .then(list => { state.dbEvents = list; render(); })
-      .catch(() => render());
-  } else {
-    render();
+    // Scope to the operator's company (event → show → production → tenant).
+    loadTenantEvents(state.currentUser && state.currentUser.tenantId);
   }
 }
 
@@ -5138,6 +5212,7 @@ function selectEventTime(id, time) {
 
 /* ========== INIT ========== */
 
+restoreScanSession();   // resume an existing operator session (tenant-scoped) if present
 render();
 startDashTicker();
 ensureDashInitialized();
