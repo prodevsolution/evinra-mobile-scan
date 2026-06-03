@@ -4661,13 +4661,14 @@ function loadTenantEvents(tenantId) {
   const base = DB_URL + '/api/db';
   const done = () => { try { renderEventPicker(); } catch (e) {} render(); };
   if (!tenantId) {
-    // No tenant on the account — fall back to all published events (back-compat).
-    fetch(base + '/events?status=eq.published&order=name.asc')
-      .then(r => r.json())
-      .then(list => { state.dbEvents = Array.isArray(list) ? list : []; done(); })
-      .catch(() => {});
+    // Account isn't linked to a company. Do NOT show other tenants' events
+    // (cross-company isolation) — surface a clear message instead.
+    state.dbEvents = [];
+    state.eventLoadState = 'no-tenant';
+    done();
     return;
   }
+  state.eventLoadState = 'loading';
   Promise.all([
     fetch(base + '/productions?tenant_id=eq.' + encodeURIComponent(tenantId)).then(r => r.json()).catch(() => []),
     fetch(base + '/shows').then(r => r.json()).catch(() => []),
@@ -4676,8 +4677,9 @@ function loadTenantEvents(tenantId) {
     const prodIds = new Set((prods || []).map(p => String(p.id || p._id)));
     const showIds = new Set((shows || []).filter(s => prodIds.has(String(s.production_id))).map(s => String(s.id || s._id)));
     state.dbEvents = (events || []).filter(e => showIds.has(String(e.show_id)));
+    state.eventLoadState = 'loaded';
     done();
-  }).catch(() => {});
+  }).catch(() => { state.eventLoadState = 'error'; done(); });
 }
 
 function submitLogin() {
@@ -5076,8 +5078,17 @@ function renderEventPicker() {
   let currentId = (evs.find(e => e.ts != null && e.ts >= startOfToday.getTime() && e.ts < endOfToday) || {}).id;
   if (!currentId) { const up = evs.filter(e => e.ts != null && e.ts >= now); currentId = (up[0] || evs[0] || {}).id; }
 
+  const emptyMsg =
+      state.eventLoadState === 'no-tenant'
+        ? `<div style="color:var(--t-3);font-size:13px;text-align:center;padding:40px 16px;line-height:1.6">Your account isn't linked to a company.<br>Ask your administrator to assign you to one in the Ticket System.</div>`
+    : state.eventLoadState === 'error'
+        ? `<div style="color:var(--t-3);font-size:13px;text-align:center;padding:40px 16px">Couldn't load events. Check your connection and try again.</div>`
+    : state.eventLoadState === 'loaded'
+        ? `<div style="color:var(--t-3);font-size:13px;text-align:center;padding:40px 16px">No published events for your company yet.</div>`
+        : `<div style="color:var(--t-3);font-size:13px;text-align:center;padding:40px 0">Loading events…</div>`;
+
   const cardHTML = evs.length === 0
-    ? `<div style="color:var(--t-3);font-size:13px;text-align:center;padding:40px 0">Loading events…</div>`
+    ? emptyMsg
     : evs.map(e => {
         const sel = selectedId === e.id;
         const isCurrent = e.id === currentId;
