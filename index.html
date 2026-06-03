@@ -5074,18 +5074,24 @@ function renderEventPicker() {
   const content = document.getElementById('event-picker-content');
   const selectedId = state.eventPickerSelected; // event id (string) or null
 
-  // One card per real event, sorted by date, showing the actual day + time.
-  const evs = (state.dbEvents || []).map(e => {
-    const w = epWhen(e.start_at);
-    return { id: String(e.id || e._id), name: epClean(e.name) || 'Event', date: w.date, time: w.time, ts: w.ts, desc: e.description };
-  }).sort((a, b) => (a.ts || Infinity) - (b.ts || Infinity));
-
-  // Mark the "current" event: one happening today, else the soonest upcoming.
+  // Build cards from real events, then keep only CURRENT/FUTURE ones (an operator
+  // works today's or upcoming shows — never past dates, and not undated parents).
   const now = Date.now();
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
-  const endOfToday = startOfToday.getTime() + 86400000;
-  let currentId = (evs.find(e => e.ts != null && e.ts >= startOfToday.getTime() && e.ts < endOfToday) || {}).id;
-  if (!currentId) { const up = evs.filter(e => e.ts != null && e.ts >= now); currentId = (up[0] || evs[0] || {}).id; }
+  const startTs = startOfToday.getTime();
+  const endOfToday = startTs + 86400000;
+
+  let evs = (state.dbEvents || []).map(e => {
+    const w = epWhen(e.start_at);
+    return { id: String(e.id || e._id), name: epClean(e.name) || 'Event', date: w.date, time: w.time, ts: w.ts, desc: e.description };
+  });
+  const dated = evs.filter(e => e.ts != null && e.ts >= startTs);   // today or later
+  // Prefer current/future dated shows; only fall back to undated events if there are none.
+  evs = (dated.length ? dated : evs.filter(e => e.ts == null)).sort((a, b) => (a.ts || Infinity) - (b.ts || Infinity));
+
+  // Badge: "TODAY" only if it's genuinely today; otherwise mark the soonest as "NEXT".
+  const todayId = (evs.find(e => e.ts != null && e.ts >= startTs && e.ts < endOfToday) || {}).id;
+  const nextId  = todayId ? null : (evs.find(e => e.ts != null && e.ts >= now) || evs[0] || {}).id;
 
   const emptyMsg =
       state.eventLoadState === 'no-tenant'
@@ -5100,7 +5106,9 @@ function renderEventPicker() {
     ? emptyMsg
     : evs.map(e => {
         const sel = selectedId === e.id;
-        const isCurrent = e.id === currentId;
+        const isToday = e.id === todayId;
+        const isNext = e.id === nextId;
+        const badgeText = isToday ? 'TODAY' : (isNext ? 'NEXT' : '');
         const meta = [e.date, e.time].filter(Boolean).join(' · ');
         return `
           <button onclick="selectEventCard('${e.id}')"
@@ -5109,12 +5117,12 @@ function renderEventPicker() {
                    border-radius:14px;padding:14px 16px;margin-bottom:10px;
                    cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:12px">
             <div style="width:9px;height:9px;border-radius:50%;flex-shrink:0;
-                        background:${isCurrent ? 'var(--p)' : 'var(--t-4)'}"></div>
+                        background:${(isToday || isNext) ? 'var(--p)' : 'var(--t-4)'}"></div>
             <div style="flex:1;min-width:0">
               <div style="font-size:15px;font-weight:600;color:var(--t);margin-bottom:3px">${e.name}</div>
               <div style="font-size:12px;color:var(--t-3)">${meta}${e.desc ? ' · ' + e.desc : ''}</div>
             </div>
-            ${isCurrent ? `<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--p);background:var(--p-dim);border:0.5px solid var(--p-border);padding:3px 8px;border-radius:6px;flex-shrink:0">TODAY</span>` : ''}
+            ${badgeText ? `<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--p);background:var(--p-dim);border:0.5px solid var(--p-border);padding:3px 8px;border-radius:6px;flex-shrink:0">${badgeText}</span>` : ''}
             ${sel ? `<span style="color:var(--p);font-size:18px;flex-shrink:0">✓</span>` : ''}
           </button>`;
       }).join('');
