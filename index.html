@@ -4678,14 +4678,18 @@ function loadTenantEvents(tenantId) {
     return;
   }
   state.eventLoadState = 'loading';
+  // An operator scans active shows (published OR on sale) — not just "published".
+  // Exclude only non-sellable states; date filtering (today/future) happens in the picker.
+  const INACTIVE = { draft: 1, cancelled: 1, canceled: 1, archived: 1, void: 1 };
   Promise.all([
     fetch(base + '/productions?tenant_id=eq.' + encodeURIComponent(tenantId)).then(r => r.json()).catch(() => []),
     fetch(base + '/shows').then(r => r.json()).catch(() => []),
-    fetch(base + '/events?status=eq.published&order=name.asc').then(r => r.json()).catch(() => []),
+    fetch(base + '/events?order=start_at.asc').then(r => r.json()).catch(() => []),
   ]).then(([prods, shows, events]) => {
     const prodIds = new Set((prods || []).map(p => String(p.id || p._id)));
     const showIds = new Set((shows || []).filter(s => prodIds.has(String(s.production_id))).map(s => String(s.id || s._id)));
-    state.dbEvents = (events || []).filter(e => showIds.has(String(e.show_id)));
+    state.dbEvents = (events || []).filter(e =>
+      showIds.has(String(e.show_id)) && !INACTIVE[String(e.status || '').toLowerCase()]);
     state.eventLoadState = 'loaded';
     done();
   }).catch(() => { state.eventLoadState = 'error'; done(); });
@@ -5083,7 +5087,7 @@ function renderEventPicker() {
 
   let evs = (state.dbEvents || []).map(e => {
     const w = epWhen(e.start_at);
-    return { id: String(e.id || e._id), name: epClean(e.name) || 'Event', date: w.date, time: w.time, ts: w.ts, desc: e.description };
+    return { id: String(e.id || e._id), name: epClean(e.name) || 'Event', date: w.date, time: w.time, ts: w.ts, desc: e.description, venue: e.venue || '' };
   });
   const dated = evs.filter(e => e.ts != null && e.ts >= startTs);   // today or later
   // Prefer current/future dated shows; only fall back to undated events if there are none.
@@ -5109,7 +5113,7 @@ function renderEventPicker() {
         const isToday = e.id === todayId;
         const isNext = e.id === nextId;
         const badgeText = isToday ? 'TODAY' : (isNext ? 'NEXT' : '');
-        const meta = [e.date, e.time].filter(Boolean).join(' · ');
+        const meta = [[e.date, e.time].filter(Boolean).join(' · '), e.venue].filter(Boolean).join('  ·  ');
         return `
           <button onclick="selectEventCard('${e.id}')"
             style="width:100%;text-align:left;background:${sel ? 'rgba(45,184,156,.10)' : 'rgba(255,255,255,.03)'};
