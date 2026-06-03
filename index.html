@@ -5274,6 +5274,13 @@ function selectEventTime(id, time) {
 
 restoreScanSession();   // resume an existing operator session (tenant-scoped) if present
 render();
+// Visible build marker (temporary) — confirms which deploy is live.
+try {
+  var _bt = document.createElement('div');
+  _bt.textContent = 'build 2026-06-03c';
+  _bt.style.cssText = 'position:fixed;left:6px;bottom:4px;z-index:99999;font:10px/1 monospace;color:rgba(255,255,255,.45);background:rgba(0,0,0,.3);padding:2px 5px;border-radius:4px;pointer-events:none';
+  document.body.appendChild(_bt);
+} catch(e){}
 startDashTicker();
 ensureDashInitialized();
 </script>
