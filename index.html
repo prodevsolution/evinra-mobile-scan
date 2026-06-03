@@ -4639,6 +4639,9 @@ function restoreScanSession() {
   if (!raw) return false;
   let p; try { p = JSON.parse(raw); } catch (e) { return false; }
   if (!p || !p.user) return false;
+  // Discard stale sessions with no tenant (e.g. a pre-tenant or legacy login):
+  // every real operator belongs to a company, so force a fresh sign-in instead.
+  if (!p.user.tenantId) { clearScanSession(); return false; }
   // "Remember me" sessions persist up to 12h; tab sessions live until the tab closes.
   if (persistent && p.ts && (Date.now() - p.ts) > 12 * 3600 * 1000) { clearScanSession(); return false; }
 
