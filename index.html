@@ -47,13 +47,17 @@ body{font-family:var(--sans);background:#081510;color:var(--t);line-height:1.4;m
 
 /* ============ DEVICE FRAME ============ */
 .device{width:390px;max-width:100%;background:#000;border-radius:42px;padding:8px;border:0.5px solid var(--bd);box-shadow:0 20px 60px rgba(0,0,0,0.4)}
-.screen{background:var(--bg);border-radius:36px;overflow:hidden;height:min(780px, calc(100dvh - 52px));display:flex;flex-direction:column;position:relative}
+.screen{background:var(--bg);border-radius:36px;overflow:hidden;display:flex;flex-direction:column;position:relative;
+  height:700px;                              /* fallback: definite height so flex/scroll always works */
+  height:min(780px, calc(100vh - 52px));     /* older browsers (vh) */
+  height:min(780px, calc(100dvh - 52px));    /* modern browsers (dynamic viewport) */
+}
 /* On phones, drop the desktop device frame and fill the viewport so pinned
    footers (e.g. Start Shift) are always visible. */
 @media (max-width:480px){
-  body{padding:0;gap:0;min-height:100dvh}
+  body{padding:0;gap:0;min-height:100vh;min-height:100dvh}
   .device{width:100%;max-width:100%;border-radius:0;padding:0;border:none;box-shadow:none}
-  .screen{border-radius:0;height:100dvh}
+  .screen{border-radius:0;height:100vh;height:100dvh}
 }
 
 /* Status bar */
