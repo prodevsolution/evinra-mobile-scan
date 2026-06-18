@@ -173,7 +173,7 @@ body{font-family:var(--sans);background:#081510;color:var(--t);line-height:1.4;m
 .wb-uid-ic{width:48px;height:48px;border-radius:14px;background:var(--g-lt);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--g)}
 .wb-uid-ic svg{width:24px;height:24px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .wb-uid-label{font-size:11px;color:var(--t-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
-.wb-uid-val{font-size:15px;font-weight:600;color:var(--t);font-family:ui-monospace,SFMono-Regular,monospace;letter-spacing:.02em}
+.wb-uid-val{font-size:15px;font-weight:600;color:var(--t);font-family:ui-sans-serif,SFMono-Regular,sans-serif;letter-spacing:.02em}
 .wb-uid-sub{font-size:11px;color:var(--t-3);margin-top:2px}
 
 .wb-search-input{width:100%;background:rgba(255,255,255,0.06);border:0.5px solid var(--bd-2);border-radius:12px;padding:12px 16px;font-size:14px;color:var(--t);font-family:inherit;outline:none;margin-bottom:12px}
@@ -647,7 +647,7 @@ body{font-family:var(--sans);background:#081510;color:var(--t);line-height:1.4;m
 /* Drill — activity feed */
 .drill-feed{display:flex;flex-direction:column;gap:4px}
 .drill-feed-row{display:flex;align-items:center;gap:10px;padding:9px 11px;background:rgba(255,255,255,0.02);border:0.5px solid var(--bd);border-radius:9px}
-.drill-feed-time{font-size:10px;color:var(--t-3);font-family:ui-monospace,monospace;flex-shrink:0;width:56px}
+.drill-feed-time{font-size:10px;color:var(--t-3);font-family:ui-sans-serif,sans-serif;flex-shrink:0;width:56px}
 .drill-feed-ic{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .drill-feed-ic svg{width:14px;height:14px}
 .drill-feed-body{flex:1;min-width:0}
@@ -668,7 +668,7 @@ body{font-family:var(--sans);background:#081510;color:var(--t);line-height:1.4;m
 .drill-fraud-sev.sev-high{background:rgba(220,38,38,0.2);color:#fca5a5}
 .drill-fraud-sev.sev-medium{background:rgba(245,158,11,0.2);color:var(--warn-t)}
 .drill-fraud-sev.sev-low{background:rgba(100,116,139,0.2);color:var(--t-3)}
-.drill-fraud-time{font-size:11px;color:var(--t-3);font-family:ui-monospace,monospace}
+.drill-fraud-time{font-size:11px;color:var(--t-3);font-family:ui-sans-serif,sans-serif}
 .drill-fraud-action{font-size:14px;font-weight:600;color:var(--t);margin-bottom:4px;line-height:1.25}
 .drill-fraud-detail{font-size:12px;color:var(--t-2);line-height:1.45;margin-bottom:10px}
 .drill-fraud-meta{display:flex;flex-wrap:wrap;gap:10px;padding-top:8px;border-top:0.5px solid var(--bd);margin-bottom:10px}
@@ -986,7 +986,7 @@ body{font-family:var(--sans);background:#081510;color:var(--t);line-height:1.4;m
 .pair-device-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px}
 .pair-device-row:not(:last-child){border-bottom:0.5px solid var(--g-bd)}
 .pair-device-k{color:var(--t-3);font-size:12px}
-.pair-device-v{color:var(--t);font-weight:500;font-family:monospace}
+.pair-device-v{color:var(--t);font-weight:500;font-family:sans-serif}
 
 .pair-detecting{display:flex;gap:10px;align-items:center;padding:14px;background:rgba(59,130,246,0.08);border:0.5px solid rgba(59,130,246,0.25);border-radius:10px;margin-bottom:16px;font-size:12px;color:var(--info-t)}
 .pair-detecting svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;animation:spin 1.5s linear infinite;flex-shrink:0}
@@ -1961,7 +1961,7 @@ function renderScanTab() {
                     padding:10px 14px;margin-bottom:24px;text-align:left;max-width:300px;width:100%">
           <div style="font-size:10px;color:var(--g);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:3px">Checked in</div>
           <div style="font-size:15px;font-weight:600;color:var(--t)">${gw.guestName}</div>
-          <div style="font-size:11px;color:var(--t-3);margin-top:2px;font-family:monospace">${gw.ticketCode}</div>
+          <div style="font-size:11px;color:var(--t-3);margin-top:2px;font-family:sans-serif">${gw.ticketCode}</div>
         </div>
         <div class="vf"><div class="vf-line"></div></div>
         <div class="head-md">Scan wristband QR</div>
@@ -2000,7 +2000,7 @@ function renderScanTab() {
         <div class="sub">${gw.guestName} is all set</div>
         <div class="info-card">
           <div class="info-card-name">${gw.guestName}</div>
-          <div class="info-card-sub" style="font-family:monospace">${gw.wristbandQR}</div>
+          <div class="info-card-sub" style="font-family:sans-serif">${gw.wristbandQR}</div>
         </div>
         <div class="chip">Ticket + wristband linked ✓</div>
         <button onclick="cancelGateWristband()" style="margin-top:20px;padding:11px 28px;border-radius:12px;
@@ -2373,7 +2373,7 @@ function renderWristbandTab() {
           <div class="wb-writing-anim">${ICONS.nfc}</div>
           <div class="wb-writing-h">Pairing wristband…</div>
           <div class="wb-writing-s">Linking ${s.guest.name} to ${s.wristbandQR}</div>
-          <div style="font-size:11px;color:var(--t-4);margin-top:20px;font-family:ui-monospace,monospace">
+          <div style="font-size:11px;color:var(--t-4);margin-top:20px;font-family:ui-sans-serif,sans-serif">
             Saving to shared database
           </div>
         </div>
@@ -2393,7 +2393,7 @@ function renderWristbandTab() {
           <div class="wb-pair-summary">
             <div class="wb-pair-summary-row"><span>Guest</span><span>${s.guest.name}</span></div>
             <div class="wb-pair-summary-row"><span>Ticket</span><span>${s.guest.ticketId}</span></div>
-            <div class="wb-pair-summary-row"><span>Wristband QR</span><span style="font-family:ui-monospace,monospace">${s.wristbandQR}</span></div>
+            <div class="wb-pair-summary-row"><span>Wristband QR</span><span style="font-family:ui-sans-serif,sans-serif">${s.wristbandQR}</span></div>
             <div class="wb-pair-summary-row"><span>Pass</span><span>${s.guest.pass}</span></div>
             <div class="wb-pair-summary-row"><span>Time</span><span>${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</span></div>
           </div>
@@ -3023,7 +3023,7 @@ function renderSquare() {
             ${isCash ? `<div class="wb-pair-summary-row"><span>Tendered</span><span>$${(sq.cashTendered / 100).toFixed(2)}</span></div>` : ''}
             <div class="wb-pair-summary-row"><span>Method</span><span>${sq.method === 'tap_iphone' ? 'Tap to Pay on iPhone' : sq.method === 'terminal' ? 'Square Terminal' : 'Cash'}</span></div>
             ${attrName ? `<div class="wb-pair-summary-row"><span>Guest</span><span>${attrName}</span></div>` : ''}
-            <div class="wb-pair-summary-row"><span>Payment ID</span><span style="font-family:ui-monospace,monospace;font-size:11px">${sq.paymentId}</span></div>
+            <div class="wb-pair-summary-row"><span>Payment ID</span><span style="font-family:ui-sans-serif,sans-serif;font-size:11px">${sq.paymentId}</span></div>
             <div class="wb-pair-summary-row"><span>At</span><span>${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</span></div>
           </div>
         </div>
@@ -5278,7 +5278,7 @@ render();
 try {
   var _bt = document.createElement('div');
   _bt.textContent = 'build 2026-06-03c';
-  _bt.style.cssText = 'position:fixed;left:6px;bottom:4px;z-index:99999;font:10px/1 monospace;color:rgba(255,255,255,.45);background:rgba(0,0,0,.3);padding:2px 5px;border-radius:4px;pointer-events:none';
+  _bt.style.cssText = 'position:fixed;left:6px;bottom:4px;z-index:99999;font:10px/1 sans-serif;color:rgba(255,255,255,.45);background:rgba(0,0,0,.3);padding:2px 5px;border-radius:4px;pointer-events:none';
   document.body.appendChild(_bt);
 } catch(e){}
 startDashTicker();
